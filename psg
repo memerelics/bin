@@ -1,0 +1,5 @@
+#!/bin/bash
+car=`echo $1 | cut -b 1`
+cdr=`echo $1 | cut -b 2-`
+
+ps aux | grep [$car]$cdr | grep -v psg

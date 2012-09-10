@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ $# -eq 2 ]; then
+  str=`find . -name "*" -print | xargs grep -n $1 | awk "NR==$2"`
+  filename=`echo $str | awk '{split($1,ary,":"); print ary[1]}'`
+  line=`echo $str | awk '{split($1,ary,":"); print ary[2]}'`
+  vim $filename +$line
+else
+  exit 1
+fi

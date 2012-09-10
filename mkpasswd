@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ $# -eq 0 ]; then
+  keta=8
+else
+  keta=$1
+fi
+jot -r -c $keta 48 122 | tr -d '[:space:]'; echo

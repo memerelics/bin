@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+# -*- coding: utf-8 -*-
+require "open-uri"
+require "rexml/document"
+
+hoge = ARGV[0]
+
+unless hoge.nil?
+  def parse uri
+    list = []
+    open(uri) {|f| f.each_line {|line| list << line} }
+    return list.select{|r| r =~ /ItemID/}.first.strip.gsub(/<ItemID>|<\/ItemID>/,"")
+  end
+
+  def get_word uri
+    list = []
+    open(uri) {|f| f.each_line {|line| list << line} }
+    return list.select{|r| r =~ /<div>.*<\/div>/}.first.strip.gsub(/<div>|<\/div>/, "")
+  end
+
+  def japanese? word
+     !(word =~ /[0-9A-Za-z_]/)
+  end
+
+  if japanese?(hoge)
+    hoge = URI.encode(hoge)
+    dic = "EdictJE"
+  else
+    dic = "EJdict"
+  end
+  url = "http://public.dejizo.jp/NetDicV09.asmx/SearchDicItemLite?"
+  uri = "#{url}Dic=#{dic}&Word=#{hoge}&Scope=HEADWORD&Match=STARTWITH&Merge=AND&Prof=XHTML&PageSize=20&PageIndex=0"
+
+  word = parse(uri)
+
+  uri = "http://public.dejizo.jp/NetDicV09.asmx/GetDicItemLite?Dic=#{dic}&Item=#{word}&Loc=&Prof=XHTML"
+
+  word = get_word(uri)
+
+  p word
+end

@@ -1,0 +1,1 @@
+foreach br \(`git branch -a | awk '{print $1}' | grep -v "*"`\); echo $br; echo `g log --pretty=format:'%Cblue%h %Cgreen%ai %Cred%an %Creset%s' -n 1 $br`; end

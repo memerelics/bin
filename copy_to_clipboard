@@ -3,18 +3,19 @@
 TMP=$HOME/.tmp_copy_to_clipboard
 tmux save-buffer $TMP
 
+
 fail=0
 if which pbcopy > /dev/null 2>&1 ; then
   cat $TMP | pbcopy
 elif which xsel > /dev/null 2>&1 ; then
-  cat $TMP | xsel --clipboard
+  cat $TMP | xsel --input --clipboard
 else
   fail=1
 fi
 
 if [ $fail -eq 0 ] ; then
-  HEAD=`head -1 /$TMP`
-  TAIL=`tail -1 /$TMP`
+  HEAD=`head -1 $TMP`
+  TAIL=`tail -1 $TMP`
   tmux display-message "Copy: $HEAD ... $TAIL"
 else
   tmux display-message "Copy failed."

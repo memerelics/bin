@@ -1,8 +1,10 @@
 #!/bin/sh
 
 if [ $# -eq 1 ]; then
-    # git diff --no-ext-diff -- `git status -s -b | grep -v "^#" | awk '{print$1="";print}' | grep -v "^$" | awk "NR==$1"` | vim -R -
-    git diff -- `git status -s -b | grep -v "^#" | awk '{print$1="";print}' | grep -v "^$" | awk "NR==$1"`
+  # git diff --no-ext-diff -- `git status -s -b | grep -v "^#" | awk '{print$1="";print}' | grep -v "^$" | awk "NR==$1"` | vim -R -
+  git diff -- `git status -s -b | grep -v "^#" | awk '{print$1="";print}' | grep -v "^$" | awk "NR==$1"`
+elif [ $# -eq 0 ]; then
+  git diff
 else
-    exit 1
+  exit 1
 fi

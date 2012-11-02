@@ -5,4 +5,6 @@ if [ $# -eq 0 ]; then
 else
   keta=$1
 fi
-jot -r -c $keta 48 122 | tr -d '[:space:]'; echo
+if [ `which jot` ]; then
+  jot -r -c $keta 48 122 | tr -d '[:space:]'; echo
+fi

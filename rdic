@@ -9,7 +9,9 @@ unless hoge.nil?
   def parse uri
     list = []
     open(uri) {|f| f.each_line {|line| list << line} }
-    return list.select{|r| r =~ /ItemID/}.first.strip.gsub(/<ItemID>|<\/ItemID>/,"")
+    first = list.select{|r| r =~ /ItemID/}.first
+    exit 1 if first == nil
+    return first.strip.gsub(/<ItemID>|<\/ItemID>/,"")
   end
 
   def get_word uri

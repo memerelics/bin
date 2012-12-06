@@ -1,0 +1,478 @@
+#!/usr/bin/env python
+#-*- coding: utf-8 -*-
+u"""
+unzip-cp932: unzip an arcive file that created with Windows Japanese Edition
+
+USAGE: unzip-cp932 <zip file> <path for extract files into> <target file1> <target file2> ...
+
+※　Windows日本語版で作成したZIPファイルはアーカイブ情報の文字コードがcp932で
+  あることで、Linux上では文字化けの為、正しく解凍出来ない問題が生じることもある。
+  　このソースコードはcp932をuncode化し、その問題を手当てしたものである。見た目は
+Linux標準のunzipに近い操作性をエミュレートしているが、unzipの豊富なコマンドの
+オプションは一切実装していない。第2引数は解凍対象ファイル名ではなく解凍先
+ディレクトリを指定する仕様で、省略すると「unzip -l」相等の書庫情報リスト表示を、
+さらに第3引数以降には、解凍対象ファイルを必要なだけ指定出来る。
+　機能的には少ないながらも、ヘルプ表示、書庫一覧、指定ファイルの書庫解凍を提供
+している。
+
+【専用関数】
+prn_help()        : ヘルプ
+def unzip()       : 個別ファイルの解凍先への解凍処理の本体
+prn_ZipInfo()     : 書庫情報の非表示
+ZipInfo_sum(z)    : 書庫情報の総ファイル長とファイル数のタプルを返す
+select()          : コンソールにプロンプトを出し、求める範囲の返答の英字1文字を返す
+exist_filename()  : 拡張子補完を含め、指定のファイル名の存在を確認し在れば名前を返し
+and_items()       : 2つのリスト共通の文字列を返す関数(各要素は文字列に限る)
+new_name()        : 重複しない様に3桁の数値iを附記したファイル名候補を提示し入力
+unzip4cp932(c)    : 「unzip-cp932」の本体関数
+【汎用系関数】
+unicode_width()   : UNICODE文字列の文字幅を返す関数(2010-05-10公開分)
+unicode_ljust()   : UNICODE左寄せ
+unicode_center()  : UNICODE中央寄せ
+unicode_rjust()   : UNICODE右寄せ
+"""
+__author__    = "Mire in Japan"
+__date__      = "2012-10-05"
+__version__   = '0.0.4'
+__copyright__ = 'Copyright (c) 2012-09-28 Mire'
+__license__   = 'GPL'
+__url__       = 'http://pythonlife.seesaa.net/article/294731873.html '
+
+__history__ = U"""【更新履歴】
+0.0.1  2012-09-28 　リリース初版
+0.0.1a 2012-09-30 　解凍処理中のみ個別ファイル名を画面表示する様に変更
+0.0.2  2012-10.01 　書出先に同名ファイルがある場合の処理選択を追加
+                  オリジナルのunzipと異なりファイル名変更時に非重複名を
+                  生成し提示する仕様に
+                  　仕様変更部分の説明書きを修正
+                  　ファイル名は引用符で囲んで表示する様に
+0.0.3  2012-10.02 　第3引数以降に解凍ファイル(複数)を指定出来る様に仕様変更
+                  　さらに、第1引数だけのときは書庫情報の一覧を表示する様に
+                  することで、解凍時には第2引数の解凍先の指定が必須となった。
+0.0.4  2012-10.05 　unzip-cp932の本体をunzip4cp932()関数に記述し、最下部の
+                  実行部分はその引数定義に留めた。またunzip4cp932()関数はフロー
+                  中心の記述に留め、具体的な処理は個別関数に記述した。
+                  　また、オリジナルのunzipと異なり一覧表示時の項目幅も引数で
+                  カスタマイズ可能にした。日本語化も変数のリテラル値を変更する
+                  だけだ。
+"""
+__todo__ = u"""【TODO】: 対応する気はないけど(笑)備忘の為、課題を列記
+* 　オリジナルのunzipとは異なり、zip解凍の機能のみをpythonで実現したものだ。
+  従って、不具合解決や思いついた仕様を何時でも盛り込める。
+* 　ただ、その為、Linux環境別に第1行目のpythonへのpathを調整する必要がある。
+* 　オリジナルのunzipとは異なり、unzipにある豊富なオプションには完全未対応。
+* 　オリジナルのunzipとは異なり、第1引数のzipファイルのみを指定した場合は、
+  その書庫内のファイル一覧を表示する仕様としている。その為、解凍には第2引数の
+  「解凍先ディレクトリ」の指定が最低限必須となる仕様とした。
+* 　オリジナルのunzipとは異なり、第2引数は「解凍先ディレクトリ」の固定であり、
+  解凍対象ファイル名ではない。第3引数以降が解凍対象ファイルの指定席である。
+"""
+
+def prn_help(msg_replace):
+    print u"""unzip-cp932 %s of %s. Maintained by %s. Send bug
+reports using %s
+You can use unzip-cp932 and this source code under the terms of
+the \'%s\' Licence.(See for detail: http://www.gnu.org/licenses/gpl.html )
+
+USAGE: unzip-cp932 <a zip file> [<path for extract files into> [<file1>,...]]
+
+利用方法: unzip-cp932 <zipファイル> [<解凍先ディレクトリ>[ <解凍対象ファイル1>,...]]
+
+※　書庫情報の表示にはで解凍対象のZIPファイル1つを指定します。そして、書庫には
+  解凍先ディレクトリを続けて指定することが必要です。書庫内の特定ファイルのみを
+  解凍したい場合には、その後にそれらのファイル名を続けて引数指定します。
+  unzipコマンドの様な多様なオプションは一切実装していませんし、当然、解凍後の
+  ファイル中の文字コード自体は当前圧縮時のままです。中身のコード変換はnkf辺りが
+  その守備範囲です。そこらをあたって下さい。
+  　また、解凍先に解凍ファイルと同じ名のファイルがある場合は、以下の様に
+  その対応をオリジナル同様に選択出来る様にしています。
+
+  %s
+
+　[y]es   :上書きとする。※既存のファイルは復活出来ない。
+　[n]o    :上書きしない。※ファイルは既存のままで整合検査が必要なことも。
+　[A]ll   :全てを上書き。※既存のファイルがあれば、それは復活出来ない。
+　[N]one  :処理を中止。  ※もう、何(None)もしません(笑)。
+　[r]ename:別名前で実行。※オリジナルのunzipと異なり新ファイル名候補も提示。
+
+  　尚、「[r]ename」ではファイル名の末尾に数字を附加したファイル名を生成し
+  候補として提示する。それで是なら改行、否ならCtrl+Shift+CとCtrl+Shift+Vで
+  コピペする等して、ファイル名入力し改行することになる。そうして、指定した
+  ファイル名が重複していないなら解凍が実行され、不意の上書きは防止出来る。
+  　しかし、このunzip-cp932には<解凍先ディレクトリ>を第2引数で指定出来る
+  ので、一つでも「overwrire?:"<file>"」と表示されたなら[N]oneで何にもせず
+  処理を中止して、新たに新規の解凍先名を指定しunzip-cp932を実行しZIPの
+  中身全てを解凍する方が推奨出来る。新規の解凍先名のフォルダは現存しないなら
+  自動で作成し解凍がなされるので手間は要らないし、テキストファイルならば
+  linuxの標準コマンドで「diif　-du <dir1> <dir2>」とすることで差分チェックも
+  容易に出来るからだ。
+
+【ライセンス】
+　広く活用頂く為、GPLとしてます。GPLの日本語詳細は次のURL等で確認して下さい。
+http://sourceforge.jp/projects/opensource/wiki/licenses%%252FGNU_General_Public_License_version_3.0
+
+　このunzip-cp932は%sライセンスの公開義務等に従いうことでこのソースコードも
+改変しご活用頂けます。その場合の改変内容の公開は不具合連絡同様、下記のBlog
+へのコメントで済ませて下さる形で構いません。
+  %s
+
+%s
+%s""" % (__version__, __date__, __author__, __url__, __license__
+            , msg_replace[1:] % ('<file>'), __license__, __url__
+            , __history__, __todo__)
+
+## 個別ファイルの解凍先への解凍処理本体 ##
+def unzip(z, unicode_name, name, filepath
+        , msg_unzip=u'\rinflating: \"%s\"', bites=256):
+    u"""
+    個別ファイルの解凍先への解凍処理の本体
+    既存ファイルの上書き判定でも同じ記述と
+    なるので冗長性解消の為に関数化
+    """
+    print msg_unzip % (unicode_name)    #      解凍処理中の個別ファイル名を表示(2012-09-30)
+                                        #      引用符で囲んで表示する様に変更(2012-10-01)
+    x = z.open(name, 'r')               #      ZIPファイル内の中身ファイルを開く
+    fpo = open(filepath, 'wb')          #      unicode文字列化したファイルの書込みを
+    d = x.read(bites)                   #      ZIP内の個別ファイルを256biteずつ(既定)読取り
+    while d:                            #      中身がある限り、ループ継続
+        fpo.write(d)                    #        解凍して行く
+        d = x.read(bites)               #        次の256バイト(既定)を読取り、ループ折返し
+    x.close()                           #      ZIPファイル内の中身ファイルを閉じる
+    fpo.close()                         #      unicode文字列化したファイルを閉じる
+
+def prn_ZipInfo(zipname, code, msg_zippath=u'\rfilepath:'
+                , zinfo_items = ['Length ', 'Date', 'Time', 'Name'] #リスト項目名
+                , zinfo_widths = [9, 10, 5, 4]                      #リスト項目幅
+                , zinfo_line = u'-'                                 #罫線用文字
+                , zinfo_files=u'files'
+                ):
+    u"""
+    以下の様式の「unzip -l」相等の書庫情報一覧を表示する関数
+    既定値では以下の通り、
+      Length      Date    Time    Name
+    ---------  ---------- -----   ----
+        12345  2012-10-04 12:34   readme.txt
+    ---------                     -------
+    123456789                     123 files
+    　但し、「unzip -l」の様にファイル長が9桁固定のままでは様式が壊れる可能性が
+    あるので、そこを自動調整可能な方向に仕様変更。2012-10-04
+    """
+    from zipfile import ZipFile                 #ZIP形式の圧縮ファイルの操作
+    t = zinfo_items
+    w = zinfo_widths
+    zinfo_size = u'%%%dd ' % (w[0])
+    print msg_zippath, zipname                  #の引数を画面出力
+    # ZipFileオブジェクト生成 #
+    z = ZipFile(zipname, 'r')                   #第1引数指定のZIPを読込モードで開き
+    sum , count = ZipInfo_sum(z)                #総ファイルサイズ, ファイル総数
+    l = len('%d' % (sum))                       #総ファイルサイズの表示文字数(幅)
+    max_len = max(w[0], l)
+    zinfo_header0 = u'%s  %s %s   %s' % (unicode_rjust(t[0], max_len)   #項目名ヘッダー
+                                        , unicode_center(t[1], w[1])
+                                        , unicode_ljust(t[2], w[2])
+                                        , t[3])
+    zinfo_header1 = u'%s  %s %s   %s' % (''.ljust(max_len, '-')         #罫線ヘッダー
+                                        , ''.ljust(w[1], '-')
+                                        , ''.ljust(w[2], '-')
+                                        , ''.ljust(max(w[3]
+                                        , unicode_width(t[3])), '-'))
+    cnt_str = u'%d %s' % (count, zinfo_files)                           #ファイル件数
+    zinfo_footer0=u'%s  %s %s   %s' % (''.ljust(max_len, '-')           #罫線フッター
+                                        , ''.ljust(w[1], ' ')
+                                        , ''.ljust(w[2], ' ')
+                                        , ''.ljust(unicode_width(cnt_str), '-'))
+    print zinfo_header0                         #u'  Length      Date    Time    Name'
+    print zinfo_header1                         #u'---------  ---------- -----   ----'
+    infolist = z.infolist()                     #  指定したZIPの書庫情報リストを取得
+    for info in infolist:                       #  書庫情報リストからファイル情報を順に取出し
+        print zinfo_size % (info.file_size) ,   #    解凍後のファイルサイズ
+        print u'%4d-%02d-%02d %02d:%02d' % (    #    unzipでは「月-日-年」の順だか
+                            info.date_time[:5]),#    ISO準拠の「年-月-日」の仕様に
+        print u' \"%s\"' % (                    #    空白文字を含むものをcopy&pasteする時に
+                unicode(info.filename, code))   #    有用な二重引用符囲みな仕様に
+    zinfo_footer1=u'%%%dd                     %%s' % (w[0])
+    print zinfo_footer0                         #u'---------                     -------'
+    print zinfo_footer1 % (sum, cnt_str)        #u'%9d                     %d files'
+
+def ZipInfo_sum(z):
+    u"""
+    書庫情報の総ファイル長とファイル数のタプルを返す関数
+    用途先: prn_ZipInfo()関数内のヘッダーとフッダーの項目幅決定で活用
+    """
+    sum = 0                                     #解凍後の総ファイルサイズの初期化
+    infolist = z.infolist()                     #書庫情報リストを取得
+    for info in infolist:                       #そのリストから書庫情報を1つずつ
+        sum = sum + info.file_size              #  解凍後の総ファイルサイズに加算
+    return sum, len(infolist)                   #総ファイル長とファイル数のタプルを返す
+
+def select(prompt='answer?[Y/N]', answers=['Y', 'N']):
+    u"""
+    # 処理方法の確認入力用 #
+    コンソールにプロンプトを出し、求める範囲の返答の英字1文字を返す
+    """
+    from sys import stdin                       #コマンドラインからの標準入力
+    print prompt,                               #「上書きしますか?」と処理確認
+    ans = stdin.readline()[0]                   #処理方法確認の頭1文字取得し
+    while not ans in answers:                   #リストの5文字以外なら、
+        print prompt,                           #  「上書きしますか?」と
+        ans = stdin.readline()[0]               #  処理方法の確認を繰り返す
+    return ans                                  #求める範囲と一致した文字1つを返す
+
+def exist_filename(filename, ext, message):
+    u"""
+    拡張子補完を含め、指定のファイル名の存在を確認し在れば名前を返し
+    無いなら、messageを表示した上で、Noneを返す関数
+
+    unzip-cp932: cannot find or open "abc.zip"
+                                   , "abc.zip.zip"
+                                  or "abc.zip.ZIP"
+    """
+    from os.path import exists
+    f1 = '.'.join([filename, ext.lower()])          #第1引数+'.zip'
+    f2 = '.'.join([filename, ext.upper()])          #第1引数+'.ZIP'
+    if  exists(filename):                           #第1引数が実在ファイルなら
+        return filename                             #  第1引数をZIPファイル名に
+    elif exists(f1):                                #第1引数+'.zip'が実在ファイルなら
+        return f1                                   #  第1引数+'.zip'をZIPファイル名に
+    elif exists(f2):                                #第1引数+'.ZIP'が実在ファイルなら
+        return f2                                   #  第1引数+'.ZIP'をZIPファイル名に
+    else:                                           #第1引数のファイルは不存在なら
+        print message,                              #  その旨表示して
+        l = unicode_width(message)                  #  メッセージの文字長 ※全角半角未対応!!
+        print '\"%s\"' % (filename)                 #  比較したファイル名候補を
+        print  '%s,' % (''.ljust(l-1)),  #  オリジナルのunzipにならい表示
+        print '\"%s\"' % (f1)                       #  　但し、ファイル名の候補は比較し易い
+        print  '%sor' % (''.ljust(l-2)),  #  様に改行し頭を揃える様にした。
+        print '\"%s\"' % (f2)                       #
+        #exit()                                      #  ※　システム終了は、活用側記述とする
+        return None                                 #  Noneを返す
+
+def and_items(list1, list0, code1, code0):
+    u"""
+    2つのリスト共通の文字列を返す関数(各要素は文字列に限る)
+    用途: 書庫情報list0と入力値list1で一致するリストの生成
+    """
+    and_list=[]                                     #解凍対象ファイル名のリスト
+    for item1 in list1:                             #順に
+        itm1 = unicode(item1, code1)                #  比較の為unicode文字列にしてから
+        i = 0
+        for item0 in list0:                         #  ZIP内ファイル名一覧の中で
+            if itm1==unicode(item0, code0):         #    解凍可能な完全一致の分は
+                and_list.append(item0)              #      解凍対象ファイルリストに追加
+                exit                                #      ループから抜ける
+    return and_list
+
+def new_name(wname, i=1, prompt=u'\rnew name[%s]: ', code='utf-8'):
+    u"""
+    既存ファイル名と重複しない3桁の数値iを附記したファイル名候補を
+    提示した上で、ファイル名入力を促す関数
+    """
+    from os.path import exists, splitext            #ファイルの存否判定, 拡張子分離用
+    from sys import stdin                           #コマンドラインからの標準入力
+    root, ext = splitext(wname)                     #拡張子を分離し
+    fpath = wname                                   #初期値には元々のファイル名をセットし
+    while exists(fpath):                            #生成文字列のファイルが存する限り、
+        fpath = '%s_%03d%s' % (root, i, ext)        #  3桁数字附加のファイル名を生成
+        if exists(fpath):                           #  生成文字列のファイル存在なら
+            i += 1                                  #   iを進め
+        else:                                       #  ファイルとして不存在なら
+            print prompt % (fpath),                 #    それを候補として角括弧で表示し
+            fn = stdin.readline().strip()           #    ファイル名の手入力を促す
+            if not fn.strip()=='':                  #    入力があったら、
+                fpath = fn                          #      それを書出ファイル名に
+    return fpath                                    #ループが終わればその新ファイル名を返す
+
+def unzip4cp932(code0='cp932'                                   #ZIPファイル側
+                , code1 = 'utf-8'                               #OS(コンソール入力)側
+                , answers = ['y', 'n', 'A', 'N', 'r']           #replace時のunzip準拠の選択肢
+                , msg_replace=u'\rreplace \"%s\"? [y]es, [n]o, [A]ll, [N]one, [r]ename: '
+                , msg_zippath=u'\rfilepath:'                    #zipファイル表示ヘッダ
+                , msg_new_name=u'\rnew name[%s]: '              #ファイル名変更のプロンプト
+                , msg_mkdir=u'\rcreating: \"%s\"'               #ディレクトリ作成表示ヘッダ
+                , msg_exit=u'\r%s was stoped.'                  #'N'時のメッセージ(独自)
+                , msg_skip=u'\r\"%s\" was skipped over.'        #'n'の時のメッセージ(独自)
+                , msg_unzip=u'\rinflating: \"%s\"'              #解凍時のファイル表示ヘッダ
+                , msg_exists=u'unzip-cp932: cannot find or open'    #zipファイルが無いとき
+                , zinfo_items = ['Length ', 'Date', 'Time', 'Name'] #リスト項目名
+                , zinfo_widths = [9, 10, 5, 4]                      #リスト項目幅
+                , zinfo_line = u'-'                                 #罫線用文字
+                , zinfo_files = u'files'
+                , help_opt=['--hh']):                               #ヘルプオプション
+    u"""
+    「unzip-cp932」の本体関数
+    　ここは、ほぼ処理プロセスのみを記述。オプション追加等の処理分岐の変更は
+    ここで修正することになる。
+    　表示するリテラルについては、基本的に全てこの関数の引数に集約したので、
+    比較的容易に多言語化や用途変更の要望にも答えることが出来るものと思う。
+    """
+    from sys import argv                            #コマンドライン引数
+    from zipfile import ZipFile                     #ZIP形式の圧縮ファイルの操作
+    from os.path import split as fsplit             #ファイルパスの分離
+    from os.path import exists, join                #パスの存否判定, 結合
+    from os import makedirs                         #ファイルパスの新規作成
+    if (len(argv)==1                              #引数無または
+        or (len(argv)>=2 and argv[1] in help_opt)): #第1引数がヘルプオプションなら、
+        prn_help(msg_replace=msg_replace)           #  ヘルプ表示
+    ## 対象ZIPファイル名の確定 ##
+    elif len(argv)>=2:
+        zipname = exist_filename(filename=argv[1]
+                                , ext='zip'
+                                , message=msg_exists)
+        ## 対象ZIPファイルが無いので終了 ##
+        if zipname==None:                           #対象ZIPファイルが無いなら
+            return                                  #  unzip-cp932の処理を抜ける
+    ## 「unzip -l」相等の書庫情報一覧を表示 ##
+    if len(argv)==2 and zipname:                  #第1引数迄がありそれが実在ファイルで
+        prn_ZipInfo(zipname, code0, msg_zippath
+                    , zinfo_items, zinfo_widths
+                    , zinfo_line, zinfo_files) #「unzip -l」相等の書庫情報一覧を表示
+    ## 書庫の解凍処理 ##
+    elif len(argv)>=3 and zipname:                  #第2引数以上指定で第1引数が実在ファイルで
+        print msg_zippath, zipname                  #  その引数を画面出力
+        # 第2引数:解凍先(解凍時は第2引数の解凍先指定は必須になった 2012-10-02)#
+        dir = argv[2]
+        # ZipFileオブジェクト生成 #
+        z = ZipFile(zipname, 'r')                   #  第1引数のZIPを読込モードで開き
+        # ZIP内ファイル名リストの取得 #
+        names = z.namelist()                        #  指定ZIP内ファイル名一覧を取得
+        ## 解凍対象ファイルの特定 ##
+        f_list=[]                                   #  解凍対象ファイル名のリスト
+        if  len(argv)==3:                           #  解凍対象ファイル指定を省略したら、
+            f_list=names[:]                         #    ZIP内の全ファイルを対象ファイルに
+        elif len(argv)>=4:                          #  解凍対象ファイル指定が1つ以上なら、
+            f_list = and_items(list1=argv[3:]       #    文字コードをunicodeに揃え、
+                            , list0=names           #    完全一致で包含する対象ファイル名の
+                            , code1=code1           #    リストを取得
+                            , code0=code0)          #
+        ## 解凍対象ファイルを上書き確認の上解凍 ##
+        ans = ''                                    #  処理確認の頭文字:'A'になったら全て処理
+        for name in f_list:                         #  その一覧から順にファイル名を取出し
+            unicode_name = unicode(name, code0)     #    それをunicode文字列に変換
+            p, f = fsplit(unicode_name)             #    ファイル名をパスとファイル名に分割
+            # 書出し先パス文字列の生成 #
+            path = join(dir, p)                     #    書込先パス文字列生成 2012-10-02
+            # 個別ファイルの解凍先フルパス名 #
+            filepath = join(path, f)                #    個別ファイルの解凍先パス名を生成
+            # 書出し先ディレクトリの整備 #
+            if not exists(path):                    #    そのディレクトリが不存在なら
+                print msg_mkdir % (path)            #      「作成中: ディレクトリ」の表示と
+                makedirs(path)                      #      その作成をし、解凍時エラーを回避
+            # 解凍先の既存ファイル上書き対策 #
+            if exists(filepath) and not(ans=='A'):  #    解凍先に同名ファイルがあれば
+                # 処理方法の確認入力 #
+                msg = msg_replace % (f)             #      処理方法の確認にファイル名を附記
+                ans = select(prompt=msg             #      それを表示し、選択肢の英字1文字の
+                            , answers=answers)      #      入力を取得
+                # 処理方法確認の頭1文字別の処理実行 #
+                if ans in ['y', 'A']:               #      はいor全部の選択なら、解凍処理
+                    unzip(z, unicode_name, name, filepath, msg_unzip)
+                elif ans=='r':                      #      r(改名保存)の処理選択なら、
+                    # 3桁の数字を附加して新たなファイル名を生成 #
+                    prompt = msg_new_name      #        新たなファイル名入力を促す文字列
+                    fpath = new_name(wname=filepath #        を表示し、非重複名を取得する
+                            , prompt=prompt, i=1)   #
+                    # その存在しないファイル名に変えて圧縮解凍 #
+                    unzip(z, unicode_name, name, fpath, msg_unzip, code1)
+                elif ans=='N':                      #      「中止」なら
+                    print msg_exit % (fsplit(argv[0])[1])
+                    z.close()                       #        ZipFileオブジェクトを閉じ
+                    exit()                          #        システム終了
+                elif ans=='n':                      #      「いいえ」なら
+                    print msg_skip % (f)#  処理を飛ばした旨表示
+            else:                                   #    解凍先に同名ファイル無なら、
+                unzip(z, unicode_name, name, filepath, msg_unzip) #      解凍処理
+        z.close()                                   #  ZipFileオブジェクトを閉じる
+    ## 引数等不適合時の利用方法案内 ##
+    else:
+        prn_help(msg_replace=msg_replace)
+        print u'想定外です。'
+
+## UNICODE文字列の文字幅 ##
+# 「【PythonでCGI】listを一覧表示(データ型変換と段落)」2010年05月10日よりコピー
+# ( http://pythonlife.seesaa.net/article/149444369.html )
+def unicode_width(s, width={'Na':1, 'W':2, 'F':2, 'H':1, 'A':2, 'N':1}):
+    """
+    UNICODE文字列の文字幅を返す関数
+    既定は東アジア文字セット利用前提としている
+    Na: Narrow    1 半角英数
+    H : Halfwidth 1 半角カナ
+    W : Wide      2 全角文字
+    F : Fullwidth 2 全角英数
+    N : Neutral   1 アラビア文字
+    A : Ambiguous 2 ギリシア文字、キリル文字
+    詳細はウィキペディア（Wikipedia）: 東アジアの文字幅
+    http://ja.wikipedia.org/wiki/%E6%9D%B1%E3%82%A2%E3%82%B8%E3%82%A2%E3%81%AE%E6%96%87%E5%AD%97%E5%B9%85
+    Python unicodedata.east_asian_width()
+    http://www.python.jp/doc/2.5/lib/module-unicodedata.html
+    別解としては、 【UTF8文字幅揃え】unicodedata.east_asian_width() で紹介した
+    http://pythonlife.seesaa.net/article/133360506.html?1273463358
+    hush_puppyさんの「RubyとPythonで全角文字を半角文字2文字として数える」
+    http://d.hatena.ne.jp/hush_puppy/20090226/1235661269
+    がある｡ 恐らく、そちらのほうが処理は早いだろうから、一般にはhush_puppyさん作成分を
+    お使いになると良いかと思う。当方のこの関数は、曖昧、中立の文字の扱いを状況次第で
+    切替えることが出来たらいいなとの発想と、見た目で仕組みが判り易い方式とした迄である。
+    ※　残念なことにCJK拡張Bの漢字を指定するとeast_asian_width()はTypeErrorを吐く。
+      確かにプラットフォーム側の対応も課題なので、それでどうなのって言う感じだが、
+      場合によっては例外処理で補正した方が良いのかもしれない。
+    """
+    from unicodedata import east_asian_width
+    n = 0
+    for c in s:                                   # 1文字ずつ、字幅辞書にwidthに
+        n = n + width[east_asian_width(c)]        # east_asian_width()が返す文字幅種別を入れ
+    return n                                      # 幅の累計値を返す
+
+## unicodeの左寄せ、中央寄せ、右寄せ用の即席関数 ##
+def unicode_ljust(s, w):
+    u"""unicode左寄せ"""
+    width = unicode_width(s)
+    return s+''.ljust(w - width)
+def unicode_center(s, w):
+    u"""unicode中央寄せ"""
+    width = unicode_width(s)
+    return ''.ljust((w - width)/2) + s + ''.ljust(w - width - (w - width)/2)
+def unicode_rjust(s, w):
+    u"""unicode右寄せ"""
+    width = unicode_width(s)
+    return ''.ljust(w - width) + s
+
+if __name__ == "__main__":
+    ## unzip-cp932実行時の既定の引数 ##
+    code0 = 'cp932'                                         #ZIPファイル側
+    code1 = 'utf-8'                                         #OS(コンソール入力)側
+    #「上書きしますか?」と処理確認(選択肢:「はい, いいえ, 全部, 中止, 改名」)
+    msg_replace = u'\rreplace \"%s\"? [y]es, [n]o, [A]ll, [N]one, [r]ename: '
+    answers = ('y', 'n', 'A', 'N', 'r')                     #replace時のunzip準拠の選択肢
+    msg_zippath = u'\rfilepath:'                            #zipファイル表示ヘッダ
+    msg_new_name = u'\rnew name[%s]: '                      #ファイル名変更のプロンプト
+    msg_exit = u'\r%s was stoped.'                          #終了時のメッセージ(独自)
+    msg_skip = u'\r\"%s\" was skipped over.'                #上書きしない時のメッセージ(独自)
+    msg_mkdir = u'\rcreating: \"%s\"'                       #作成ディレクトリ作成表示ヘッダ
+    msg_unzip = u'\rinflating: \"%s\"'                      #解凍時のファイル表示ヘッダ
+    msg_exists = u'unzip-cp932: cannot find or open'        #zipファイルが無いとき
+    help_opt = ('--help', '--hh')                           #ヘルプオプション
+    zinfo_items =  ['Length ', 'Date', 'Time', 'Name']      #リスト項目名
+    zinfo_widths = [9        ,10     , 5     , 4     ]      #リスト項目幅
+    zinfo_line = u'-'                                       #罫線用文字
+    zinfo_files = u'files'
+
+    u"""
+    msg_replace = u'\r既存の\"%s\"を上書しますか? やる[y]\
+, 抜かす[n], 有りったけ[A], 何もしない[N], ファイル名変更[r]: '
+    msg_new_name = u'\r新たな名前[%s]: '                    #ファイル名変更のプロンプト
+    msg_exit = u'\r%s 以降の処理は中止しました。'           #終了時のメッセージ(独自)
+    msg_skip = u'\r\"%s\" を飛ばしました。'                 #上書きしない時のメッセージ(独自)
+    msg_mkdir = u'\r作成中: \"%s\"'                         #作成ディレクトリ作成表示ヘッダ
+    msg_unzip = u'\r解凍中: \"%s\"'                         #解凍時のファイル表示ヘッダ
+    msg_exists = u'unzip-cp932: 探せないか開けません'       #zipファイルが無いとき
+    zinfo_items =  [u'サイズ ', u'日付', u'時間', u'ファイル名']#リスト項目名
+    zinfo_files = u'件'
+    """
+    ## unzip-cp932を実行 ##
+    unzip4cp932(code0=code0, code1=code1, answers = answers
+                , msg_replace=msg_replace, msg_zippath=msg_zippath
+                , msg_new_name=msg_new_name, msg_exit=msg_exit
+                , msg_skip=msg_skip, msg_mkdir=msg_mkdir
+                , msg_unzip=msg_unzip, msg_exists=msg_exists
+                , zinfo_items=zinfo_items, zinfo_widths=zinfo_widths
+                , zinfo_line=zinfo_line, zinfo_files=zinfo_files
+                , help_opt=help_opt)

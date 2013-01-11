@@ -1,0 +1,7 @@
+#!/bin/bash
+
+case $# in
+  0 ) sudo du .  | sort -rn | head -n 20 ;;
+  1 ) sudo du $1 | sort -rn | head -n 20 ;;
+  2 ) sudo du $1 | sort -rn | head -n $2 ;;
+esac

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+if [ `git remote` != 'origin' ]; then
+  exit 1
+fi
+
+if [ $# -eq 1 ]; then
+  git stash save > /dev/null && git fetch -p #&& git stash pop > /dev/null
+  hub pull-request -b zaiminc:develop -h zaiminc:$1
+  exit 1
+elif [ $# -eq 0 ]; then
+  git stash save > /dev/null && git fetch -p #&& git stash pop > /dev/null 2>&1
+  hub pull-request -b zaiminc:develop -h zaiminc:`git rev-parse --abbrev-ref HEAD`
+else
+  exit 1
+fi

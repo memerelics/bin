@@ -2,3 +2,4 @@ super-ssh
 *.app
 tbm*
 .DS_Store
+lein

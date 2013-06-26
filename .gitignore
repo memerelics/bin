@@ -3,3 +3,4 @@ super-ssh
 tbm*
 .DS_Store
 lein
+vpc-ssh

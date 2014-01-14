@@ -4,14 +4,19 @@ if [ `git remote` != 'origin' ]; then
   exit 1
 fi
 
+if git show-ref --verify --quiet refs/heads/develop; then
+    base_branch="develop"
+else
+    base_branch="master"
+fi
+
 if [ $# -eq 1 ]; then
   git stash save > /dev/null && git fetch -p #&& git stash pop > /dev/null
-  hub pull-request -b zaiminc:develop -h zaiminc:$1
+  hub pull-request -b zaiminc:$base_branch -h zaiminc:$1
   exit 1
 elif [ $# -eq 0 ]; then
   git stash save > /dev/null && git fetch -p #&& git stash pop > /dev/null 2>&1
-  #TODO: switch develop and master dynamically
-  hub pull-request -b zaiminc:develop -h zaiminc:`git rev-parse --abbrev-ref HEAD`
+  hub pull-request -b zaiminc:$base_branch -h zaiminc:`git rev-parse --abbrev-ref HEAD`
 else
   exit 1
 fi

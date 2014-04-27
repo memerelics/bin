@@ -1,6 +1,7 @@
 #!/bin/bash
 
 TMP=$HOME/.tmp_copy_to_clipboard
+cat /dev/null > $TMP
 tmux save-buffer $TMP
 
 

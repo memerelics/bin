@@ -1,9 +1,5 @@
 #!/bin/sh
 
-if [ `git remote` != 'origin' ]; then
-  exit 1
-fi
-
 if git show-ref --verify --quiet refs/heads/develop; then
     base_branch="develop"
 else

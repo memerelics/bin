@@ -5,3 +5,4 @@ tbm*
 lein
 vpc-ssh
 phantomjs
+jq

@@ -1,0 +1,4 @@
+#!/usr/bin/env ruby
+
+instance_ids = `aws autoscaling describe-auto-scaling-instances | jq ".AutoScalingInstances[].InstanceId"`.split("\n")
+puts `aws ec2 describe-instances --instance-ids #{instance_ids.join(' ')} | jq ".Reservations[].Instances[] | .Tags[].Value, .PrivateIpAddress"`.gsub('"','').gsub(/^10/, '    10')

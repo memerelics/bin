@@ -1,0 +1,31 @@
+#!/bin/bash
+
+function usage() {
+  echo "usage: scat {up,list/ls,ssh,kill,killall}"
+  exit 1
+}
+
+case $1 in
+  up)
+    resp=`aws ec2 run-instances --region ap-northeast-1 \
+      --image-id ami-cbf90ecb \
+      --instance-type t2.micro \
+      --key-name ec2-key`
+    instanceId=`echo $resp | jq -r '.Instances[].InstanceId'`
+    aws ec2 create-tags --resources $instanceId --tags Key=Name,Value=`date +'scat-%Y%m%d-%H:%M'`
+    ;;
+  list|ls)
+    # TODO: JST LaunchTime
+    aws ec2 describe-instances --output table \
+      --filters "Name=tag:Name,Values=scat*" \
+      --query "Reservations[].Instances[].[InstanceId,PublicIpAddress,LaunchTime]"
+    ;;
+  ssh)
+    echo "TODO : ssh" ;;
+  kill)
+    echo "TODO : kill specific instance" ;;
+  killall)
+    echo "TODO : killall" ;;
+  *)
+    usage
+esac

@@ -6,3 +6,4 @@ lein
 vpc-ssh
 phantomjs
 jq
+jpc

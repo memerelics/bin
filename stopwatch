@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+
+def watch(start)
+  t = (Time.now - start).to_i
+  ms = "%02d:%02d" % [t / 60, t % 60]
+  return ms if t < 60 * 60
+  "#{t / (60 * 60)}:#{ms}"
+end
+
+start_time = Time.now
+begin
+  while true
+    output = watch(start_time)
+    printf output
+    printf "\e[#{output.size}D"
+    STDOUT.flush
+    sleep 1
+  end
+rescue Interrupt
+  puts " -- stopped: #{watch(start_time)} (#{start_time} - #{Time.now})"
+end

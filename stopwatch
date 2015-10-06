@@ -2,9 +2,8 @@
 
 def watch(start)
   t = (Time.now - start).to_i
-  ms = "%02d:%02d" % [t / 60, t % 60]
-  return ms if t < 60 * 60
-  "#{t / (60 * 60)}:#{ms}"
+  return "%02d:%02d" % [t / 60, t % 60] if t < 60 * 60
+  "#{t / (60 * 60)}:#{"%02d:%02d" % [(t / 60) % 60, t % 60]}"
 end
 
 start_time = Time.now
